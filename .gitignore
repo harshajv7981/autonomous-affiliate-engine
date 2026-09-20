@@ -157,6 +157,9 @@ ENV/
 env.bak/
 venv.bak/
 
+# Node dependencies
+node_modules/
+
 # Spyder project settings
 .spyderproject
 .spyproject
@@ -202,6 +205,9 @@ cython_debug/
 # .vscode/
 # Temporary file for partial code execution
 tempCodeRunnerFile.py
+
+# Next.js build output
+.next/
 
 # Ruff stuff:
 .ruff_cache/
