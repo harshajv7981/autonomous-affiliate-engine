@@ -209,6 +209,9 @@ tempCodeRunnerFile.py
 # Next.js build output
 .next/
 
+# Postal runtime secrets
+infrastructure/postal/postal.yml
+
 # Ruff stuff:
 .ruff_cache/
 

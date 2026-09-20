@@ -25,6 +25,33 @@ services:
       timeout: 5s
       retries: 5
 
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: affiliate-worker
+    command: ["gunicorn", "--bind", "0.0.0.0:8001", "-k", "uvicorn.workers.UvicornWorker", "apps.worker.app.main:app"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/affiliate_engine
+      REDIS_URL: redis://redis:6379/0
+      PYTHONPATH: /app
+    ports:
+      - "8001:8001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://localhost:8001/health')
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   postgres:
     image: postgres:16-alpine
     container_name: affiliate-postgres
@@ -55,6 +82,159 @@ services:
       timeout: 5s
       retries: 5
 
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: affiliate-n8n
+    environment:
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_SECURE_COOKIE: "false"
+      N8N_USER_MANAGEMENT_DISABLED: "true"
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider --quiet http://localhost:5678/healthz || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+  listmonk-db:
+    image: postgres:16-alpine
+    container_name: affiliate-listmonk-db
+    environment:
+      POSTGRES_DB: listmonk
+      POSTGRES_USER: listmonk
+      POSTGRES_PASSWORD: listmonk
+    volumes:
+      - listmonk_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U listmonk -d listmonk"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  listmonk:
+    image: listmonk/listmonk:latest
+    container_name: affiliate-listmonk
+    command: ["./listmonk", "--config", "/listmonk/config.toml"]
+    ports:
+      - "9000:9000"
+    volumes:
+      - ./infrastructure/listmonk/config.toml:/listmonk/config.toml:ro
+      - listmonk_data:/listmonk/uploads
+    depends_on:
+      listmonk-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider --quiet http://localhost:9000/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  postal-mariadb:
+    image: mariadb:10.11
+    platform: linux/amd64
+    container_name: affiliate-postal-mariadb
+    environment:
+      MARIADB_DATABASE: postal
+      MARIADB_USER: postal
+      MARIADB_PASSWORD: postal
+      MARIADB_ROOT_PASSWORD: postal-root
+    volumes:
+      - postal_mariadb_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  postal-rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    platform: linux/amd64
+    container_name: affiliate-postal-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: postal
+      RABBITMQ_DEFAULT_PASS: postal
+      RABBITMQ_DEFAULT_VHOST: postal
+    volumes:
+      - postal_rabbitmq_data_v2:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  postal-web:
+    image: ghcr.io/postalserver/postal:3.3.7
+    platform: linux/amd64
+    container_name: affiliate-postal-web
+    command: ["postal", "web-server"]
+    environment:
+      BIND_ADDRESS: 0.0.0.0
+    ports:
+      - "5001:5000"
+    volumes:
+      - ./infrastructure/postal/postal.yml:/config/postal.yml:ro
+    depends_on:
+      postal-mariadb:
+        condition: service_healthy
+      postal-rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "ruby", "-rnet/http", "-e", "exit(Net::HTTP.get_response(URI('http://127.0.0.1:5000/')).code.to_i < 500 ? 0 : 1)"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+  postal-smtp:
+    image: ghcr.io/postalserver/postal:3.3.7
+    platform: linux/amd64
+    container_name: affiliate-postal-smtp
+    command: ["postal", "smtp-server"]
+    ports:
+      - "2525:2525"
+    volumes:
+      - ./infrastructure/postal/postal.yml:/config/postal.yml:ro
+    depends_on:
+      postal-mariadb:
+        condition: service_healthy
+      postal-rabbitmq:
+        condition: service_healthy
+
+  postal-worker:
+    image: ghcr.io/postalserver/postal:3.3.7
+    platform: linux/amd64
+    container_name: affiliate-postal-worker
+    command: ["postal", "worker"]
+    volumes:
+      - ./infrastructure/postal/postal.yml:/config/postal.yml:ro
+    depends_on:
+      postal-mariadb:
+        condition: service_healthy
+      postal-rabbitmq:
+        condition: service_healthy
+
+  postal-runner:
+    profiles: ["postal-tools"]
+    image: ghcr.io/postalserver/postal:3.3.7
+    platform: linux/amd64
+    container_name: affiliate-postal-runner
+    command: ["postal"]
+    volumes:
+      - ./infrastructure/postal/postal.yml:/config/postal.yml:ro
+    depends_on:
+      postal-mariadb:
+        condition: service_healthy
+      postal-rabbitmq:
+        condition: service_healthy
+
 volumes:
-  postgres_data:
-  redis_data:
+  postgres_data: {}
+  redis_data: {}
+  n8n_data: {}
+  listmonk_postgres_data: {}
+  listmonk_data: {}
+  postal_mariadb_data: {}
+  postal_rabbitmq_data: {}
+  postal_rabbitmq_data_v2: {}

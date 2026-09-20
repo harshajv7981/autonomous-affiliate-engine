@@ -1,0 +1,45 @@
+version: 2
+
+postal:
+  web_hostname: localhost
+  web_protocol: http
+  smtp_hostname: localhost
+
+main_db:
+  host: postal-mariadb
+  username: postal
+  password: postal
+  database: postal
+
+message_db:
+  host: postal-mariadb
+  username: postal
+  password: postal
+  prefix: postal
+
+rabbitmq:
+  host: postal-rabbitmq
+  username: postal
+  password: postal
+  vhost: postal
+
+smtp_server:
+  default_bind_address: "::"
+
+smtp:
+  host: postal-smtp
+  port: 2525
+  username:
+  password:
+  from_name: Postal Lab
+  from_address: postal@localhost
+
+dns:
+  mx_records: []
+  spf_include: localhost
+  return_path_domain: localhost
+  route_domain: localhost
+  track_domain: localhost
+
+rails:
+  secret_key: ${POSTAL_RAILS_SECRET_KEY}
