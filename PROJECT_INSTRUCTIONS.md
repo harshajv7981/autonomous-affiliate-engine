@@ -916,6 +916,10 @@ No real accounts.
 Install: - Docker - PostgreSQL - Redis - n8n - FastAPI - listmonk -
 Postal - React
 
+The local stack must be bootstrappable with `make phase1-up`. The bootstrap
+command must generate local secrets and initialize listmonk and Postal only
+when their schemas are missing.
+
 ### Phase 2 --- Mock Affiliate Network
 
 Build: - 100 offers - offer API - normalization - database

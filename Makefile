@@ -1,4 +1,4 @@
-.PHONY: install test run-api run-worker
+.PHONY: install test phase1-up run-api run-worker
 
 install:
 	python3 -m pip install -U pip
@@ -6,6 +6,9 @@ install:
 
 test:
 	PYTHONPATH=apps/api python3 -m pytest apps/api/tests -q
+
+phase1-up:
+	./scripts/bootstrap/phase1-up.sh
 
 run-api:
 	PYTHONPATH=apps/api uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
