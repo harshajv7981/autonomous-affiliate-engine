@@ -1,0 +1,169 @@
+# Project Status
+
+Updated: 2026-10-20
+
+## Phase 2 & 3: Persistence (new)
+
+Offers, audiences and subscribers now live in PostgreSQL.
+
+- SQLAlchemy models: `offers`, `audiences`, `subscribers`, `consent_records`,
+  `suppression_records` (in `db/models/`).
+- One Alembic migration creates all five tables: `make migrate` (`alembic upgrade head`).
+- Idempotent seeding: `make seed` → offers=100, audiences=10, subscribers=10,000,
+  consent_records=10,000, suppression_records=500. Re-running changes nothing
+  (offers/audiences merged by PK; subscriber set inserted only when empty).
+- `services/offer_repository.py` + `services/seeding.py`; entrypoint `scripts/seed.py`.
+- `GET /api/offers` now reads from PostgreSQL (EPC-ordered), not the in-memory adapter.
+- Integration tests (`test_offer_persistence.py`, `test_audience_persistence.py`) prove
+  persistence, idempotency, consent/suppression integrity, and API-from-DB. They reset
+  the schema via a `fresh_db` fixture and skip cleanly when Postgres is down.
+
+Suite now 43 tests. The orchestrator loop now reads its offers/audiences/subscribers
+from these seeded tables (not in-memory): run `make migrate && make seed` first, then
+the engine and dashboard reflect the database. Deleting offers from the DB yields a
+zero-campaign run, confirming it is DB-backed.
+
+## Autonomous Loop (new)
+
+The full simulated loop now runs end-to-end through an orchestrator that chains the
+agents, with no database yet (in-memory, deterministic, $0):
+
+- `agents/orchestrator.py` — `run_engine()`: offer → score → match audience →
+  generate creative → **compliance gate** → send → simulate funnel → revenue/cost →
+  optimizer decision → aggregated overview. Respects the kill switch and the
+  deterministic compliance gate (neither can be overridden by an agent).
+- `agents/optimizer_agent/graph.py` — rule-based `decide()` returning SCALE / PAUSE /
+  KILL / TEST / RETRY (AI seam).
+- `agents/campaign_agent/graph.py` — `generate_creative()` templated creative (AI seam).
+- `simulator/world.py` — 10 synthetic audiences + subscribers (configurable size).
+- `simulator/events.py` — deterministic delivery/click/conversion funnel with
+  configurable rates.
+- API: `POST /api/engine/run`, and `GET /api/analytics/overview` + `/campaigns` now
+  return **live computed** numbers (previously hardcoded). Kill switch via
+  `SYSTEM_ACTIVE`.
+- Dashboard fetches the live overview/campaigns (falls back gracefully if API is down).
+- Tests: event simulator, optimizer, and full e2e loop (incl. compliance-blocks and
+  kill-switch). Suite now 39 tests, all passing.
+
+Still deterministic only (no LLM yet) and still in-memory (no persistence) — those are
+the next increments.
+
+---
+Updated: 2026-09-20
+
+## Summary
+
+Phase 0 architecture work is complete. Phase 1 local infrastructure is complete and reproducible with Docker Compose. Phase 2 has started but is not complete because mock offers are not yet persisted in PostgreSQL.
+
+## Completed
+
+### Phase 0: Architecture
+
+- Replaced the original instructions with the updated `$0` local-development instructions in `PROJECT_INSTRUCTIONS.md`.
+- Added domain event contracts with event IDs, event types, aggregate IDs, timestamps, payloads, correlation IDs, and idempotency keys.
+- Added deterministic compliance decision contracts: `APPROVE`, `REVIEW`, and `BLOCK`.
+- Preserved the adapter boundary for affiliate networks.
+- Documented ownership boundaries in `docs/architecture/phase-0-boundaries.md`.
+- No real affiliate accounts or real traffic are required.
+
+### Phase 1: Local Infrastructure
+
+- Docker Compose stack includes:
+  - PostgreSQL
+  - Redis
+  - FastAPI API
+  - Worker
+  - n8n
+  - listmonk and its PostgreSQL database
+  - Postal web server
+  - Postal SMTP server
+  - Postal worker
+  - Postal MariaDB
+  - Postal RabbitMQ
+- Added SQLAlchemy and Alembic foundations.
+- Added API `/health` and dependency-aware `/ready` checks.
+- Added Postal lab configuration with generated, ignored runtime secrets.
+- Added listmonk configuration and initialization.
+- Added idempotent Phase 1 bootstrap:
+
+```bash
+make phase1-up
+```
+
+The bootstrap starts the stack and initializes listmonk and Postal only when their schemas are missing.
+
+### Engineering Baseline
+
+- Ruff linting configured and passing.
+- GitHub Actions runs backend lint/tests and the dashboard build.
+- Next.js dashboard shell exists with overview and campaign detail routes.
+- Backend test suite currently passes 23 tests.
+- Current Docker services are healthy locally.
+
+## Current Infrastructure Status
+
+| Service | Status |
+|---|---|
+| API | Healthy |
+| Worker | Healthy |
+| PostgreSQL | Healthy |
+| Redis | Healthy |
+| n8n | Healthy |
+| listmonk | Healthy |
+| listmonk PostgreSQL | Healthy |
+| Postal web | Healthy |
+| Postal SMTP | Running |
+| Postal worker | Running |
+| Postal MariaDB | Healthy |
+| Postal RabbitMQ | Healthy |
+
+## Phase 2: Started, Not Complete
+
+Implemented:
+
+- Mock affiliate adapter.
+- 100 synthetic offers.
+- Offer normalization.
+- Offer API route.
+- Offer eligibility and scoring tests.
+
+Still required:
+
+- SQLAlchemy `offers` model.
+- Alembic migration for the offers table.
+- Offer repository/service.
+- Persist all 100 mock offers in PostgreSQL.
+- Make the Offer API read from PostgreSQL.
+- Add integration tests proving persistence and repeatable seeding.
+
+The current database only has Alembic's tracking table; the offer data is still generated in memory.
+
+## Git Promotion Status
+
+The project uses:
+
+```text
+feature -> develop -> release -> main
+```
+
+Merged:
+
+- Phase 0 feature merged into `develop`, then promoted through `release` to `main`.
+- PR #5 merged Phase 1 Postal infrastructure and updated architecture instructions into `develop`.
+- PR #6 merged the Phase 1 bootstrap automation into `develop`.
+
+PR links:
+
+- [PR #5: Add Postal lab mail infrastructure](https://github.com/harshajv7981/autonomous-affiliate-engine/pull/5)
+- [PR #6: Automate Phase 1 local bootstrap](https://github.com/harshajv7981/autonomous-affiliate-engine/pull/6)
+
+## Next Work
+
+The next milestone is Phase 2 completion:
+
+1. Create the SQLAlchemy offer model.
+2. Generate the first Alembic domain migration.
+3. Add PostgreSQL offer persistence.
+4. Seed the 100 mock offers idempotently.
+5. Serve offers from the database through the API.
+6. Add integration coverage for the full offer ingestion path.

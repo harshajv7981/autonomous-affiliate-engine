@@ -1,6 +1,7 @@
 import pytest
 
 from integrations.affiliate.mock import MockAffiliateAdapter
+from policies.offer_rules import check_offer_eligibility
 from services.offer_ingestion import OfferIngestionService
 
 
@@ -40,3 +41,13 @@ def test_offer_ingestion_normalizes_offer_payload():
     assert offer.id == "offer-1"
     assert offer.email_allowed is True
     assert offer.allowed_traffic_types == ["email", "social"]
+
+
+def test_offer_missing_status_is_not_eligible():
+    offer = OfferIngestionService.normalize_offer(
+        {"id": "offer-2", "allowed_traffic_types": ["email"], "email_allowed": True}
+    )
+
+    assert offer.status == "unknown"
+    assert offer.geo == "unknown"
+    assert check_offer_eligibility(offer, "email").reasons == ("OFFER_NOT_ACTIVE",)

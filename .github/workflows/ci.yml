@@ -20,7 +20,7 @@ jobs:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
         ports:
-          - 5432:5432
+          - 5433:5432
         options: >-
           --health-cmd "pg_isready -U postgres -d affiliate_engine"
           --health-interval 5s
@@ -42,12 +42,12 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.9'
+          python-version: '3.14'
           cache: pip
-          cache-dependency-path: requirements.txt
+          cache-dependency-path: requirements*.txt
 
       - name: Install Python dependencies
-        run: python -m pip install -r requirements.txt
+        run: python -m pip install -r requirements-dev.txt
 
       - name: Lint Python
         run: ruff check .

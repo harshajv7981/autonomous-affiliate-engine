@@ -1,3 +1,4 @@
+import os
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config, pool
@@ -6,6 +7,12 @@ from alembic import context
 from db.models import Base
 
 config = context.config
+config.set_main_option(
+    "sqlalchemy.url",
+    os.environ.get(
+        "DATABASE_URL", "postgresql+psycopg://postgres:postgres@localhost:5433/affiliate_engine"
+    ),
+)
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)

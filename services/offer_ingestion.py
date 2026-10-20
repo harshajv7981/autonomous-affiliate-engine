@@ -12,7 +12,7 @@ class OfferIngestionService:
             description=raw_offer.get("description", ""),
             advertiser=raw_offer.get("advertiser", "Unknown"),
             category=raw_offer.get("category", "unknown"),
-            geo=raw_offer.get("geo", "US"),
+            geo=raw_offer.get("geo", "unknown"),
             payout=float(raw_offer.get("payout", 0.0)),
             payout_type=raw_offer.get("payout_type", "CPA"),
             epc=float(raw_offer.get("epc", 0.0)),
@@ -22,5 +22,5 @@ class OfferIngestionService:
             email_approval_required=bool(raw_offer.get("email_approval_required", False)),
             terms_url=raw_offer.get("terms_url"),
             tracking_url_template=raw_offer.get("tracking_url_template"),
-            status=raw_offer.get("status", "active"),
+            status=raw_offer.get("status", "unknown"),
         )
