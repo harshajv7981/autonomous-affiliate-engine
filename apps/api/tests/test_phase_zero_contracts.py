@@ -1,8 +1,9 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from domain.compliance.decision import ComplianceDecision, ComplianceResult
 from domain.events.event import DomainEvent, EventType
 from integrations.affiliate.base import AffiliateNetworkAdapter
+from integrations.affiliate.mock import MockAffiliateAdapter
 
 
 def test_domain_event_has_idempotent_identity_and_audit_fields():
@@ -10,7 +11,7 @@ def test_domain_event_has_idempotent_identity_and_audit_fields():
         event_id="event-1",
         event_type=EventType.CLICK_RECORDED,
         aggregate_id="campaign-1",
-        occurred_at=datetime.now(timezone.utc),
+        occurred_at=datetime.now(UTC),
         payload={"recipient_id": "recipient-1"},
     )
 
@@ -39,4 +40,6 @@ def test_affiliate_adapter_contract_exposes_required_operations():
         "sync_reports",
     }
 
-    assert required_methods.issubset(set(dir(AffiliateNetworkAdapter)))
+    assert required_methods == AffiliateNetworkAdapter.__abstractmethods__
+    assert issubclass(MockAffiliateAdapter, AffiliateNetworkAdapter)
+    MockAffiliateAdapter()  # raises TypeError if any contract method is missing

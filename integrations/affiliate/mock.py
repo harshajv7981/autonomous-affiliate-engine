@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from integrations.affiliate.base import AffiliateNetworkAdapter
 
-class MockAffiliateAdapter:
+
+class MockAffiliateAdapter(AffiliateNetworkAdapter):
     async def sync_offers(self) -> list[dict[str, Any]]:
         offers: list[dict[str, Any]] = []
         for i in range(1, 101):

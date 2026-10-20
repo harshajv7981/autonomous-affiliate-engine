@@ -20,10 +20,10 @@ def test_valid_offer_is_eligible_for_email_traffic():
         email_allowed=True,
     )
 
-    result = check_offer_eligibility(offer, "email", True)
+    result = check_offer_eligibility(offer, "email")
 
-    assert result.allowed is True
-    assert result.reason is None
+    assert result.is_sendable is True
+    assert result.reasons == ()
 
 
 def test_email_forbidden_offer_is_blocked():
@@ -44,7 +44,7 @@ def test_email_forbidden_offer_is_blocked():
         email_allowed=False,
     )
 
-    result = check_offer_eligibility(offer, "email", True)
+    result = check_offer_eligibility(offer, "email")
 
-    assert result.allowed is False
-    assert result.reason == "Email traffic is not allowed for this offer"
+    assert result.is_sendable is False
+    assert result.reasons == ("EMAIL_NOT_ALLOWED",)

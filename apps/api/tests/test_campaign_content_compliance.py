@@ -1,7 +1,9 @@
 from agents.campaign_agent.graph import build_campaign
 from domain.audiences.audience import Audience
+from domain.compliance import ComplianceDecision
 from domain.offers.offer import Offer
 from policies.campaign_rules import validate_campaign
+from policies.content_rules import check_content_compliance
 
 
 def test_generated_campaign_content_is_validated():
@@ -43,10 +45,9 @@ def test_generated_campaign_content_is_validated():
         cta="Learn more",
     )
 
-    validation = validate_campaign(offer, audience)
-    assert campaign.subject_line
+    validation = validate_campaign(offer, audience, campaign.subject_line, campaign.body)
     assert campaign.cta == "Learn more"
-    assert validation["approved"] is True
+    assert validation.is_sendable is True
 
 
 def test_campaign_content_rejected_when_prohibited_claims_present():
@@ -82,9 +83,14 @@ def test_campaign_content_rejected_when_prohibited_claims_present():
 
     subject = "Guaranteed income in 2 days"
     content = "This claim is not allowed and may mislead recipients."
-    validation = validate_campaign(offer, audience)
-    prohibited_claims = ["guaranteed", "guaranteed income", "no risk"]
-    blocked = any(term in subject.lower() for term in prohibited_claims) or any(term in content.lower() for term in prohibited_claims)
+    validation = validate_campaign(offer, audience, subject, content)
 
-    assert validation["approved"] is True
-    assert blocked is True
+    assert validation.decision is ComplianceDecision.BLOCK
+    assert "PROHIBITED_CLAIM:guaranteed income" in validation.reasons
+
+
+def test_prohibited_claims_match_hyphen_and_spacing_variants():
+    for claim in ("Risk-free trial", "Risk–free", "Risk—free", "risk_free", "risk/free"):
+        assert check_content_compliance(claim, "").is_sendable is False, claim
+    assert check_content_compliance("", "Guaranteed\n  income").is_sendable is False
+    assert check_content_compliance("A smarter way to grow", "Learn more").is_sendable is True

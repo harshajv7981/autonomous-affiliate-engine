@@ -1,22 +1,15 @@
-from __future__ import annotations
+from domain.compliance import ComplianceDecision, ComplianceResult
 
-from dataclasses import dataclass
-from typing import Optional
-
-
-@dataclass
-class OfferRuleResult:
-    allowed: bool
-    reason: Optional[str] = None
+OFFER_RULES = ("offer.status", "offer.email_allowed", "offer.traffic_type", "offer.email_approval")
 
 
-def check_offer_eligibility(offer: object, traffic_type: str, email_enabled: bool) -> OfferRuleResult:
+def check_offer_eligibility(offer: object, traffic_type: str) -> ComplianceResult:
     if getattr(offer, "status", "") != "active":
-        return OfferRuleResult(False, "Offer is not active")
-    if email_enabled and not getattr(offer, "email_allowed", False):
-        return OfferRuleResult(False, "Email traffic is not allowed for this offer")
+        return ComplianceResult(ComplianceDecision.BLOCK, ("OFFER_NOT_ACTIVE",), OFFER_RULES)
+    if traffic_type == "email" and not getattr(offer, "email_allowed", False):
+        return ComplianceResult(ComplianceDecision.BLOCK, ("EMAIL_NOT_ALLOWED",), OFFER_RULES)
     if traffic_type not in getattr(offer, "allowed_traffic_types", []):
-        return OfferRuleResult(False, "Traffic type is not permitted")
-    if getattr(offer, "email_approval_required", False) and email_enabled:
-        return OfferRuleResult(False, "Email approval is required")
-    return OfferRuleResult(True)
+        return ComplianceResult(ComplianceDecision.BLOCK, ("TRAFFIC_TYPE_NOT_ALLOWED",), OFFER_RULES)
+    if traffic_type == "email" and getattr(offer, "email_approval_required", False):
+        return ComplianceResult(ComplianceDecision.REVIEW, ("EMAIL_APPROVAL_REQUIRED",), OFFER_RULES)
+    return ComplianceResult(ComplianceDecision.APPROVE, (), OFFER_RULES)

@@ -10,13 +10,9 @@ postal_schema="$(mktemp)"
 trap 'rm -f "$listmonk_schema" "$postal_schema"' EXIT
 
 ./scripts/bootstrap/postal-init.sh "$postal_config"
-$compose up -d
 
-printf 'Waiting for core services...\n'
-until [ "$($compose ps -q postgres | xargs docker inspect --format '{{.State.Health.Status}}' 2>/dev/null || true)" = "healthy" ] \
-  && [ "$($compose ps -q redis | xargs docker inspect --format '{{.State.Health.Status}}' 2>/dev/null || true)" = "healthy" ]; do
-  sleep 2
-done
+printf 'Waiting for databases and queues...\n'
+$compose up -d --wait --wait-timeout 300 postgres redis listmonk-db postal-mariadb postal-rabbitmq
 
 printf 'Initializing listmonk when required...\n'
 docker exec affiliate-listmonk-db psql -U listmonk -d listmonk -tAc "select to_regclass('public.settings')" > "$listmonk_schema"

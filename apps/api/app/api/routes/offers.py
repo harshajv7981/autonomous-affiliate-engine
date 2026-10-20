@@ -1,20 +1,13 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
 
-from integrations.affiliate.mock import MockAffiliateAdapter
-from services.offer_ingestion import OfferIngestionService
+from db.session import get_db
+from services.offer_repository import list_offers, serialize_offer
 
 router = APIRouter(prefix="/api/offers", tags=["offers"])
 
 
 @router.get("")
-async def list_offers() -> list[dict]:
-    adapter = MockAffiliateAdapter()
-    raw_offers = await adapter.sync_offers()
-    return [OfferIngestionService.normalize_offer(item).__dict__ for item in raw_offers[:10]]
-
-
-@router.post("/sync")
-async def sync_offers() -> dict[str, str]:
-    adapter = MockAffiliateAdapter()
-    await adapter.sync_offers()
-    return {"status": "synced"}
+def list_offers_route(limit: int = 10, db: Session = Depends(get_db)) -> list[dict]:  # noqa: B008  (FastAPI dependency idiom)
+    """Serve offers from PostgreSQL (seeded from the mock network)."""
+    return [serialize_offer(offer) for offer in list_offers(db, limit=limit)]

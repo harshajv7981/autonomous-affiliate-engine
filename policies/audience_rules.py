@@ -1,8 +1,15 @@
-def check_audience_eligibility(audience: object, traffic_type: str) -> dict:
+from domain.compliance import ComplianceDecision, ComplianceResult
+
+AUDIENCE_RULES = ("audience.status", "audience.email_allowed", "audience.permission_verified")
+
+
+def check_audience_eligibility(audience: object, traffic_type: str) -> ComplianceResult:
     if getattr(audience, "status", "") != "active":
-        return {"eligible": False, "reason": "Audience is not active"}
+        return ComplianceResult(ComplianceDecision.BLOCK, ("AUDIENCE_NOT_ACTIVE",), AUDIENCE_RULES)
     if traffic_type == "email" and not getattr(audience, "email_allowed", False):
-        return {"eligible": False, "reason": "Email traffic is not allowed for this audience"}
+        return ComplianceResult(
+            ComplianceDecision.BLOCK, ("AUDIENCE_EMAIL_NOT_ALLOWED",), AUDIENCE_RULES
+        )
     if not getattr(audience, "permission_verified", False):
-        return {"eligible": False, "reason": "Audience permission is not verified"}
-    return {"eligible": True, "reason": None}
+        return ComplianceResult(ComplianceDecision.BLOCK, ("AUDIENCE_NOT_APPROVED",), AUDIENCE_RULES)
+    return ComplianceResult(ComplianceDecision.APPROVE, (), AUDIENCE_RULES)

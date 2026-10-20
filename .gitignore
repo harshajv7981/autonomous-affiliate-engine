@@ -160,6 +160,10 @@ venv.bak/
 # Node dependencies
 node_modules/
 
+# Next.js / TypeScript build artifacts
+*.tsbuildinfo
+.next/
+
 # Spyder project settings
 .spyderproject
 .spyproject

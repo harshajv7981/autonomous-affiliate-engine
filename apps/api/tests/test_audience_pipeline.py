@@ -19,8 +19,8 @@ def test_audience_eligible_when_permission_verified():
 
     result = check_audience_eligibility(audience, "email")
 
-    assert result["eligible"] is True
-    assert result["reason"] is None
+    assert result.is_sendable is True
+    assert result.reasons == ()
 
 
 def test_audience_ineligible_when_permission_missing():
@@ -40,5 +40,5 @@ def test_audience_ineligible_when_permission_missing():
 
     result = check_audience_eligibility(audience, "email")
 
-    assert result["eligible"] is False
-    assert result["reason"] == "Audience permission is not verified"
+    assert result.is_sendable is False
+    assert result.reasons == ("AUDIENCE_NOT_APPROVED",)
