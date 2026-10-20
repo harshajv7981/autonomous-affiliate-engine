@@ -1,8 +1,58 @@
 # Project Status
 
-Updated: 2026-10-20
+Updated: 2026-10-20 — tracked against `REAL_MONEY_STRATEGY.md`.
 
-## Phase 2 & 3: Persistence (new)
+## Where we are
+
+**Gate 1 (software works in simulation): reached.** The full MVP loop runs end-to-end
+on persisted data with 56 passing tests:
+Offer → Audience → Campaign → Compliance → Simulated send → Click → Conversion →
+Commission → Revenue/cost → Optimizer recommendation → Dashboard.
+
+**Gates 2–6 are blocked on non-engineering work** (see "Pending — needs you" below).
+
+## MVP completion (Phases 2, 4–9 + §14)
+
+- **Phase 2:** offers have a unique key on `(network_id, external_offer_id)`; seeding
+  upserts on it. Data confirmed to survive a Postgres restart.
+- **Phase 4:** campaigns carry a disclosure, A/B subject variants, and an affiliate
+  tracking URL whose `sub_id` is the campaign id (for conversion reconciliation).
+- **Phase 5:** `policies/send_rules.py` `validate_send` is the final gate: offer/audience/
+  content checks plus GEO match, disclosure, sender identity (name, email, postal
+  address), unsubscribe link, tracking URL, duplicate-send, frequency cap, and content
+  checks on every subject variant. `email_approval_required` offers stay in `REVIEW`
+  and never send. Kill switch unchanged.
+- **Phase 6:** simulator adds bounces, unsubscribes, and complaints; every result has
+  `is_simulated: true`.
+- **Phase 7:** `calculate_rates` adds CTR, CVR, EPC, bounce/unsubscribe/complaint rates
+  and the primary KPI, net contribution per 1,000 eligible recipients.
+- **Phase 8:** optimizer adds `REDUCE` (high unsubscribes) and `PAUSE` on complaint
+  rate ≥ 0.1%; runs in recommendation-only mode (`applied: false`).
+- **Phase 9:** dashboard shows a SIMULATED DATA badge, kill-switch state, optimizer
+  mode, the KPIs above, recommendations with reasons, and blocked campaigns with reasons.
+- **§14:** `is_simulated` on offers, audiences, subscribers (defaults to true, so
+  unflagged rows are treated as test data); all engine output labeled
+  `environment: simulation`.
+
+## Pending — engineering (needed before a real pilot, not before)
+
+- Real affiliate adapter (one network) behind `AffiliateNetworkAdapter`.
+- Real email sender (e.g. Resend/SES) that refuses `is_simulated` recipients and sends
+  only to controlled test inboxes until launch approval.
+- Opt-in signup + unsubscribe endpoints writing to `consent_records`/`suppression_records`.
+- Conversion/commission ledger with states `PENDING/APPROVED/REJECTED/REVERSED/PAID`,
+  idempotency keys, and reconciliation against network reports.
+- Offer terms "last checked" date; per-variant A/B measurement; auth on API/dashboard
+  before any public exposure.
+
+## Pending — needs you (cannot be automated)
+
+- Pick one niche and a legitimate audience route (owned opt-in, publisher revenue share).
+- Apply to an affiliate network; confirm per-program email permission and rules.
+- Sender domain, SPF/DKIM/DMARC, real postal address (`SENDER_POSTAL_ADDRESS`).
+- Legal review of commercial-email and privacy rules for your audience's jurisdictions.
+
+## Phase 2 & 3: Persistence
 
 Offers, audiences and subscribers now live in PostgreSQL.
 

@@ -1,8 +1,9 @@
-"""Deterministic event simulator: turns a send into a delivery/click/conversion
-funnel and commission, with no randomness so economics are reproducible.
+"""Deterministic event simulator: turns a send into a delivery/bounce/open/click/
+conversion/unsubscribe/complaint funnel and commission, with no randomness so
+economics are reproducible.
 
-Rates are configurable per PROJECT_INSTRUCTIONS section 16. Per-offer
-conversion_rate drives the variety the optimizer needs to make real decisions.
+Every result is marked is_simulated=True. Simulated revenue is engineering data
+only and must never be mixed with or reported as real affiliate earnings.
 """
 from __future__ import annotations
 
@@ -11,9 +12,11 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class SimulationRates:
-    delivery_rate: float = 0.97
+    delivery_rate: float = 0.97  # the rest bounce
     open_rate: float = 0.30
     click_rate: float = 0.08  # of delivered
+    unsubscribe_rate: float = 0.002  # of delivered
+    complaint_rate: float = 0.0005  # of delivered
 
 
 def simulate_campaign_outcome(sent_count: int, offer: object, rates: SimulationRates | None = None) -> dict:
@@ -29,8 +32,12 @@ def simulate_campaign_outcome(sent_count: int, offer: object, rates: SimulationR
     return {
         "sent": sent_count,
         "delivered": delivered,
+        "bounces": sent_count - delivered,
         "opens": opens,
         "clicks": clicks,
         "conversions": conversions,
+        "unsubscribes": int(delivered * rates.unsubscribe_rate),
+        "complaints": int(delivered * rates.complaint_rate),
         "commission": round(commission, 2),
+        "is_simulated": True,
     }

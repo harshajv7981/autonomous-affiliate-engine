@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import JSON, Boolean, Float, String
+from sqlalchemy import JSON, Boolean, Float, String, UniqueConstraint, true
 from sqlalchemy.orm import Mapped, mapped_column
 
 from db.models.base import Base
@@ -8,6 +8,10 @@ from db.models.base import Base
 
 class OfferModel(Base):
     __tablename__ = "offers"
+    # One row per network offer; seeding upserts on this key.
+    __table_args__ = (
+        UniqueConstraint("network_id", "external_offer_id", name="uq_offers_network_external"),
+    )
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
     network_id: Mapped[str] = mapped_column(String, index=True)
@@ -27,3 +31,4 @@ class OfferModel(Base):
     terms_url: Mapped[str | None] = mapped_column(String, nullable=True)
     tracking_url_template: Mapped[str | None] = mapped_column(String, nullable=True)
     status: Mapped[str] = mapped_column(String, default="active", index=True)
+    is_simulated: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())

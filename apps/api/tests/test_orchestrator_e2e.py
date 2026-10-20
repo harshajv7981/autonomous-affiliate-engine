@@ -20,6 +20,21 @@ def test_full_loop_produces_revenue_and_decisions(fresh_db):
     assert result["overview"]["conversions"] == sum(c["conversions"] for c in result["campaigns"])
 
 
+def test_every_output_is_labelled_simulated_with_tracking(fresh_db):
+    _seed(fresh_db)
+    result = asyncio.run(run_engine(system_active=True, session=fresh_db))
+
+    overview = result["overview"]
+    assert overview["is_simulated"] is True and overview["environment"] == "simulation"
+    assert overview["optimizer_mode"] == "recommendation"
+    assert "net_contribution_per_1000" in overview
+    for campaign in result["campaigns"]:
+        assert campaign["is_simulated"] is True
+        # sub_id ties network conversions back to this campaign.
+        assert f"sub_id={campaign['campaign_id']}" in campaign["tracking_url"]
+        assert len(campaign["subject_variants"]) >= 2
+
+
 def test_compliance_gate_blocks_unpermissioned_audiences(fresh_db):
     _seed(fresh_db)
     result = asyncio.run(run_engine(system_active=True, session=fresh_db))
@@ -38,3 +53,4 @@ def test_kill_switch_halts_everything():
     assert result["status"] == "halted"
     assert result["campaigns"] == []
     assert result["overview"]["revenue"] == 0.0
+    assert result["overview"]["system_status"] == "halted"
