@@ -16,10 +16,17 @@ class Settings(BaseSettings):
     frequency_cap_per_run: int = 1  # max campaigns per audience per engine run
     # Real sends go ONLY to these comma-separated addresses (inboxes you own). Empty = no real sends.
     test_recipients: str = ""
+    track_opens: bool = True  # 1x1 pixel; opens are approximate (Apple Mail prefetches, some clients block)
     smtp_host: str = "smtp.gmail.com"
     smtp_port: int = 587
     smtp_username: str = ""
     smtp_password: str = ""  # Gmail: an app password, never your account password
+    clickbank_api_key: str = ""  # ClickBank > Settings > API keys; needs api_order_read
+    # AI copy for real sends: "ollama" (local, free) or "none" (deterministic templates).
+    llm_provider: str = "none"
+    ollama_url: str = "http://localhost:11434"
+    llm_model: str = "qwen3.5:9b"
+    llm_timeout_seconds: float = 120.0
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

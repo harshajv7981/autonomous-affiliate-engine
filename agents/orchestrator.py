@@ -100,10 +100,10 @@ def sender_identity(email: str | None = None) -> str:
     return f"{settings.sender_name} <{email or settings.sender_email}>, {settings.sender_postal_address}"
 
 
-def build_send_package(offer, audience, campaign, sender: str) -> dict:
+def build_send_package(offer, audience, campaign, sender: str, creative: dict | None = None) -> dict:
     """Everything the send gate checks: copy, variants, disclosure, links, identity."""
     return {
-        **generate_creative(offer, audience),
+        **(creative or generate_creative(offer, audience)),
         "tracking_url": tracking_url(offer, campaign.id),
         "unsubscribe_url": f"{settings.public_base_url}/unsubscribe?campaign={campaign.id}",
         "sender_identity": sender,

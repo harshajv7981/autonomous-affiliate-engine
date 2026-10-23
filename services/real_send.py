@@ -18,6 +18,7 @@ from app.config import settings
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from agents.campaign_agent.ai_writer import creative_for_send
 from agents.orchestrator import build_send_package, eligible_offers, new_campaign, sender_identity
 from db.models import AudienceModel, ConsentRecord, EventModel, OfferModel, SubscriberModel
 from policies.send_rules import ANY_GEO, validate_send
@@ -59,18 +60,23 @@ def ensure_test_audience(session: Session, emails: list[str]) -> AudienceModel:
     return session.get(AudienceModel, TEST_AUDIENCE_ID)
 
 
-def render(package: dict, click_url: str, unsubscribe_url: str) -> tuple[str, str]:
+def render(package: dict, click_url: str, unsubscribe_url: str, open_url: str | None = None) -> tuple[str, str]:
     text = (
         f"{package['body']}\n\n{package['cta']}: {click_url}\n\n---\n"
         f"{package['sender_identity']}\nUnsubscribe: {unsubscribe_url}\n"
     )
     body_html = escape(package["body"]).replace("\n", "<br>")
+    # Preheader: the preview line inbox lists show next to the subject.
+    preheader = escape(package.get("preheader", ""))
     html = (
+        f'<span style="display:none;max-height:0;overflow:hidden">{preheader}</span>'
         f"<p>{body_html}</p>"
         f'<p><a href="{escape(click_url)}">{escape(package["cta"])}</a></p>'
         f'<hr><p style="font-size:12px;color:#666">{escape(package["sender_identity"])}<br>'
         f'<a href="{escape(unsubscribe_url)}">Unsubscribe</a></p>'
     )
+    if open_url:
+        html += f'<img src="{escape(open_url)}" width="1" height="1" alt="" style="display:block">'
     return text, html
 
 
@@ -112,7 +118,9 @@ def send_test_campaign(session: Session, mailer, *, system_active: bool, dry_run
     offer = candidates[0]
     campaign = new_campaign(offer, audience)
     from_email = settings.smtp_username or settings.sender_email
-    package = build_send_package(offer, audience, campaign, sender_identity(from_email))
+    package = build_send_package(
+        offer, audience, campaign, sender_identity(from_email), creative_for_send(offer, audience),
+    )
 
     decision = validate_send(
         offer, audience, package,
@@ -137,7 +145,8 @@ def send_test_campaign(session: Session, mailer, *, system_active: bool, dry_run
         subject = package["subject_variants"][index % 2]
         click_url = f"{base}/r/{campaign.id}/{subscriber.id}"
         unsubscribe_url = f"{base}/unsubscribe?subscriber={subscriber.id}&campaign={campaign.id}"
-        text, html = render(package, click_url, unsubscribe_url)
+        open_url = f"{base}/o/{campaign.id}/{subscriber.id}.gif" if settings.track_opens else None
+        text, html = render(package, click_url, unsubscribe_url, open_url)
         if not dry_run:
             mailer.send(
                 subscriber.email, subject, text, html,
@@ -155,5 +164,6 @@ def send_test_campaign(session: Session, mailer, *, system_active: bool, dry_run
         "campaign_id": campaign.id,
         "offer": offer.name,
         "offer_is_real": not offer.is_simulated,
+        "copy_source": package.get("copy_source", "template"),
         "recipients": results,
     }

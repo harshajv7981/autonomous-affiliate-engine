@@ -7,7 +7,7 @@ from urllib.parse import quote
 
 from app.config import settings
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy.orm import Session
 
 from agents.campaign_agent.graph import tracking_url
@@ -16,6 +16,8 @@ from db.session import get_db
 from services.event_log import click_key, find_event, record_event, sent_key
 
 router = APIRouter(tags=["tracking"])
+# Smallest valid transparent 1x1 GIF.
+PIXEL = bytes.fromhex("47494638396101000100800000000000ffffff21f90401000000002c00000000010001000002024401003b")
 
 
 def _page(title: str, body: str) -> HTMLResponse:
@@ -45,6 +47,15 @@ def click(campaign_id: str, subscriber_id: str, db: Session = Depends(get_db)): 
     if url.startswith("/"):  # mock network is served by this API
         url = settings.public_base_url + url
     return RedirectResponse(url, status_code=302)
+
+
+@router.get("/o/{campaign_id}/{subscriber_id}.gif")
+def open_pixel(campaign_id: str, subscriber_id: str, db: Session = Depends(get_db)) -> Response:  # noqa: B008
+    sent = find_event(db, sent_key(campaign_id, subscriber_id))
+    if sent is not None:  # unknown ids still get the pixel, but nothing is recorded
+        record_event(db, "open", campaign_id, subscriber_id=subscriber_id,
+                     offer_id=sent.offer_id, variant=sent.variant)
+    return Response(PIXEL, media_type="image/gif", headers={"Cache-Control": "no-store, max-age=0"})
 
 
 @router.get("/unsubscribe")

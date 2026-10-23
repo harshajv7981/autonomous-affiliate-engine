@@ -63,9 +63,23 @@ Real emails can go to inboxes you own, and only those:
   APPROVED + PAID as earned. Real money only comes from purchases by people other than
   you; self-clicks/self-purchases are prohibited by networks.
 
+## Opens, API sync, and AI copy
+
+- **Open tracking:** each real email carries a 1x1 pixel (`/o/{campaign}/{subscriber}.gif`);
+  opens and unique openers show in `/api/analytics/real` and the dashboard. Approximate by
+  nature (Apple Mail preloads images; some clients block them). `TRACK_OPENS=false` disables.
+- **ClickBank API sync:** `make sync-commissions` pulls affiliate orders from ClickBank's
+  Orders API (`CLICKBANK_API_KEY`, role `api_order_read`) into the same commissions ledger
+  as CSV imports; paginated, refunds netted, safe to schedule daily. Field names verified
+  against ClickBank's published schema; error paths verified against the live API.
+- **AI copy:** with `LLM_PROVIDER=ollama`, real sends get subjects/preheader/body/CTA from
+  the local model (default `qwen3.5:9b`, $0). Code adds disclosure, unsubscribe and all links;
+  invalid, link-containing or non-compliant output, or Ollama being down, falls back to the
+  template. Simulation keeps templates (fast, deterministic).
+
 ## Pending — engineering (needed before a real pilot, not before)
 
-- Network API sync (instead of CSV import) once an account has API access.
+- API sync for networks beyond ClickBank (Impact, CJ, Awin…) as you join them.
 - Opt-in signup endpoint (unsubscribe exists).
 - Signed unsubscribe/click tokens and auth on API/dashboard before public exposure.
 - Offer terms "last checked" date; transactional ESP (SES/Resend) instead of Gmail

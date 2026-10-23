@@ -30,9 +30,9 @@ async def campaigns() -> dict:
 def real(db: Session = Depends(get_db)) -> dict:  # noqa: B008
     """Real test sends to owner inboxes. Conversions come from the MOCK network: test only."""
     rows: dict[str, dict] = defaultdict(lambda: {
-        "sent": 0, "clicks": 0, "unique_clickers": set(), "conversions": 0,
+        "sent": 0, "opens": 0, "unique_openers": set(), "clicks": 0, "unique_clickers": set(), "conversions": 0,
         "test_commission": 0.0, "unsubscribes": 0,
-        "variants": defaultdict(lambda: {"sent": 0, "clicks": 0, "conversions": 0}),
+        "variants": defaultdict(lambda: {"sent": 0, "opens": 0, "clicks": 0, "conversions": 0}),
     })
     events = db.scalars(select(EventModel).where(EventModel.is_simulated.is_(False)))
     for event in events:
@@ -41,6 +41,11 @@ def real(db: Session = Depends(get_db)) -> dict:  # noqa: B008
         if event.event_type == "message_sent":
             row["sent"] += 1
             variant["sent"] += 1
+        elif event.event_type == "open":
+            row["opens"] += 1
+            row["unique_openers"].add(event.subscriber_id)
+            if variant:
+                variant["opens"] += 1
         elif event.event_type == "click":
             row["clicks"] += 1
             row["unique_clickers"].add(event.subscriber_id)
@@ -63,12 +68,14 @@ def real(db: Session = Depends(get_db)) -> dict:  # noqa: B008
     return {
         "is_simulated": False,
         "conversions_are_test_only": True,
+        "opens_are_approximate": True,
         # Real money, from the network's own reports (imported). Only APPROVED/PAID count.
         "earnings": summarize(commissions),
         "campaigns": [
             {
                 "campaign_id": campaign_id,
-                **{k: v for k, v in row.items() if k not in ("unique_clickers", "variants")},
+                **{k: v for k, v in row.items() if k not in ("unique_clickers", "unique_openers", "variants")},
+                "unique_openers": len(row["unique_openers"]),
                 "test_commission": round(row["test_commission"], 2),
                 "confirmed_earnings": round(confirmed_by_campaign.get(campaign_id, 0.0), 2),
                 "unique_clickers": len(row["unique_clickers"]),

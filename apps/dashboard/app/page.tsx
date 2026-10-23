@@ -41,6 +41,7 @@ type CampaignRow = {
 type RealRow = {
   campaign_id: string;
   sent: number;
+  unique_openers: number;
   clicks: number;
   unique_clickers: number;
   conversions: number;
@@ -268,6 +269,7 @@ export default function DashboardPage() {
               <tr style={{ textAlign: 'left', color: '#6b7280', fontSize: 13 }}>
                 <th style={cell}>Campaign</th>
                 <th style={cell}>Sent</th>
+                <th style={cell} title="Approximate: some mail apps preload images, others block them">Opened ≈</th>
                 <th style={cell}>Clicks</th>
                 <th style={cell}>Unique clickers</th>
                 <th style={cell}>Test conversions</th>
@@ -281,6 +283,7 @@ export default function DashboardPage() {
                 <tr key={row.campaign_id} style={{ borderTop: '1px solid #e5e7eb' }}>
                   <td style={{ ...cell, fontWeight: 600 }}>{row.campaign_id}</td>
                   <td style={cell}>{row.sent}</td>
+                  <td style={cell}>{row.unique_openers}</td>
                   <td style={cell}>{row.clicks}</td>
                   <td style={cell}>{row.unique_clickers}</td>
                   <td style={cell}>{row.conversions}</td>
@@ -291,7 +294,7 @@ export default function DashboardPage() {
               ))}
               {real.length === 0 && (
                 <tr>
-                  <td colSpan={8} style={{ ...cell, color: '#6b7280' }}>No real test sends yet — run make send-test-live.</td>
+                  <td colSpan={9} style={{ ...cell, color: '#6b7280' }}>No real test sends yet — run make send-test-live.</td>
                 </tr>
               )}
             </tbody>
