@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 
 from agents.orchestrator import build_send_package, eligible_offers, new_campaign, sender_identity
 from db.models import AudienceModel, ConsentRecord, EventModel, OfferModel, SubscriberModel
-from policies.send_rules import validate_send
+from policies.send_rules import ANY_GEO, validate_send
 from policies.suppression_rules import check_recipient_eligibility
 from services.event_log import find_event, record_event, sent_key
 
@@ -95,9 +95,17 @@ def send_test_campaign(session: Session, mailer, *, system_active: bool, dry_run
             EventModel.subscriber_id.in_([s.id for s in subscribers]),
         )
     ))
+    # Real offers (your own affiliate links) take priority; mock offers are only a
+    # fallback for testing the pipeline before you have one.
+    offers = list(session.scalars(select(OfferModel)))
+    real = [offer for offer in offers if not offer.is_simulated]
+    pool = eligible_offers(real) if real else eligible_offers(offers)
+    if real and not pool:
+        return {"status": "blocked", "reason": "real offers exist but none allow email "
+                "(re-add with --email-allowed once the program terms permit it)"}
     candidates = [
-        offer for offer in eligible_offers(session.scalars(select(OfferModel)))
-        if offer.geo == audience.geo and new_campaign(offer, audience).id not in already
+        offer for offer in pool
+        if offer.geo in (ANY_GEO, audience.geo) and new_campaign(offer, audience).id not in already
     ]
     if not candidates:
         return {"status": "exhausted", "reason": "every eligible offer was already sent"}
@@ -146,5 +154,6 @@ def send_test_campaign(session: Session, mailer, *, system_active: bool, dry_run
         "status": "dry_run" if dry_run else "sent",
         "campaign_id": campaign.id,
         "offer": offer.name,
+        "offer_is_real": not offer.is_simulated,
         "recipients": results,
     }

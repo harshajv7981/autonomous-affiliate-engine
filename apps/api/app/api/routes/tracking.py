@@ -13,10 +13,9 @@ from sqlalchemy.orm import Session
 from agents.campaign_agent.graph import tracking_url
 from db.models import OfferModel, SubscriberModel, SuppressionRecord
 from db.session import get_db
-from services.event_log import find_event, record_event, sent_key
+from services.event_log import click_key, find_event, record_event, sent_key
 
 router = APIRouter(tags=["tracking"])
-SUB_ID_SEPARATOR = "__"
 
 
 def _page(title: str, body: str) -> HTMLResponse:
@@ -35,11 +34,14 @@ def click(campaign_id: str, subscriber_id: str, db: Session = Depends(get_db)): 
     if sent is None:
         raise HTTPException(status_code=404, detail="Unknown link")
     offer = db.get(OfferModel, sent.offer_id)
-    url = tracking_url(offer, f"{campaign_id}{SUB_ID_SEPARATOR}{subscriber_id}") if offer else None
+    # Short opaque per-click id: fits every network's sub-id field and is what the
+    # network echoes back in its commission report.
+    click_id = uuid.uuid4().hex[:16]
+    url = tracking_url(offer, click_id) if offer else None
     if not url:
         raise HTTPException(status_code=404, detail="Offer unavailable")
     record_event(db, "click", campaign_id, subscriber_id=subscriber_id,
-                 offer_id=sent.offer_id, variant=sent.variant)
+                 offer_id=sent.offer_id, variant=sent.variant, key=click_key(click_id))
     if url.startswith("/"):  # mock network is served by this API
         url = settings.public_base_url + url
     return RedirectResponse(url, status_code=302)
@@ -88,14 +90,13 @@ def mock_offer_page(offer_id: str, sub_id: str, db: Session = Depends(get_db)) -
 
 @router.post("/mock-network/convert")
 def mock_conversion(offer_id: str, sub_id: str, db: Session = Depends(get_db)) -> HTMLResponse:  # noqa: B008
-    campaign_id, _, subscriber_id = sub_id.partition(SUB_ID_SEPARATOR)
-    sent = find_event(db, sent_key(campaign_id, subscriber_id))
+    click = find_event(db, click_key(sub_id))
     offer = db.get(OfferModel, offer_id)
-    if sent is None or offer is None or sent.offer_id != offer_id:
-        raise HTTPException(status_code=404, detail="No matching send for this click")
+    if click is None or offer is None or click.offer_id != offer_id or not offer.is_simulated:
+        raise HTTPException(status_code=404, detail="No matching click for this mock offer")
     recorded = record_event(
-        db, "conversion", campaign_id, subscriber_id=subscriber_id, offer_id=offer_id,
-        variant=sent.variant, amount=offer.payout, key=f"conversion:{offer_id}:{sub_id}",
+        db, "conversion", click.campaign_id, subscriber_id=click.subscriber_id, offer_id=offer_id,
+        variant=click.variant, amount=offer.payout, key=f"conversion:{sub_id}",
     )
     message = "Test conversion recorded." if recorded else "Already recorded — counted once."
     return _page("Thanks", f"<p>{message} (test commission ${offer.payout:.2f}, not real money)</p>")

@@ -6,8 +6,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from agents.orchestrator import run_engine
-from db.models import EventModel
+from db.models import CommissionModel, EventModel
 from db.session import get_db
+from services.commission_import import CONFIRMED, summarize
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 
@@ -52,14 +53,24 @@ def real(db: Session = Depends(get_db)) -> dict:  # noqa: B008
                 variant["conversions"] += 1
         elif event.event_type == "unsubscribe":
             row["unsubscribes"] += 1
+    commissions = list(db.scalars(select(CommissionModel).where(CommissionModel.is_simulated.is_(False))))
+    confirmed_by_campaign: dict[str, float] = defaultdict(float)
+    for commission in commissions:
+        if commission.campaign_id and (
+            commission.status in CONFIRMED or (commission.status == "REVERSED" and commission.amount < 0)
+        ):
+            confirmed_by_campaign[commission.campaign_id] += float(commission.amount)
     return {
         "is_simulated": False,
         "conversions_are_test_only": True,
+        # Real money, from the network's own reports (imported). Only APPROVED/PAID count.
+        "earnings": summarize(commissions),
         "campaigns": [
             {
                 "campaign_id": campaign_id,
                 **{k: v for k, v in row.items() if k not in ("unique_clickers", "variants")},
                 "test_commission": round(row["test_commission"], 2),
+                "confirmed_earnings": round(confirmed_by_campaign.get(campaign_id, 0.0), 2),
                 "unique_clickers": len(row["unique_clickers"]),
                 "variants": {name: dict(counts) for name, counts in row["variants"].items()},
             }

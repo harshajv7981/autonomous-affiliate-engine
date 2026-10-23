@@ -45,3 +45,7 @@ def find_event(session: Session, key: str) -> EventModel | None:
 
 def sent_key(campaign_id: str, subscriber_id: str) -> str:
     return f"sent:{campaign_id}:{subscriber_id}"
+
+
+def click_key(click_id: str) -> str:
+    return f"click:{click_id}"

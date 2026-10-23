@@ -49,12 +49,24 @@ Real emails can go to inboxes you own, and only those:
 - Results: `GET /api/analytics/real` and the dashboard's "Real test sends" section,
   kept apart from simulated numbers. Simulation never loads real records.
 
+## Real offers and real earnings
+
+- `make add-offer ARGS='--name ... --network ... --payout ... --url "https://...{sub_id}" [--geo ALL] [--email-allowed]'`
+  registers your real affiliate link. `{sub_id}` is replaced per click with a short
+  click id. Without `--email-allowed` (confirm the program terms first) sends stay blocked.
+  Real offers take priority over mock offers in `make send-test(-live)`.
+- `make import-commissions ARGS='--network ... --csv report.csv'` imports the network's
+  commission report: columns auto-detected, statuses normalized to
+  PENDING/APPROVED/REJECTED/REVERSED/PAID (unknown → PENDING), re-imports update in place,
+  negative refund rows are netted. Matched to clicks via the click id.
+- `commissions` table stores exact decimals. Dashboard "Real earnings" counts only
+  APPROVED + PAID as earned. Real money only comes from purchases by people other than
+  you; self-clicks/self-purchases are prohibited by networks.
+
 ## Pending — engineering (needed before a real pilot, not before)
 
-- Real affiliate adapter (one network) behind `AffiliateNetworkAdapter`.
+- Network API sync (instead of CSV import) once an account has API access.
 - Opt-in signup endpoint (unsubscribe exists).
-- Commission states `PENDING/APPROVED/REJECTED/REVERSED/PAID` and reconciliation
-  against network reports (events already carry idempotency keys).
 - Signed unsubscribe/click tokens and auth on API/dashboard before public exposure.
 - Offer terms "last checked" date; transactional ESP (SES/Resend) instead of Gmail
   SMTP once sending beyond your own inboxes.

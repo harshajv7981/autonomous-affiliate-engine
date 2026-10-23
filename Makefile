@@ -1,4 +1,4 @@
-.PHONY: install test phase1-up migrate seed send-test send-test-live run-api run-worker
+.PHONY: install test phase1-up migrate seed send-test send-test-live add-offer import-commissions run-api run-worker
 
 install:
 	python3 -m pip install -U pip
@@ -21,6 +21,12 @@ send-test:
 
 send-test-live:
 	PYTHONPATH=.:apps/api python3 scripts/send_test.py --send
+
+add-offer:
+	PYTHONPATH=.:apps/api python3 scripts/add_offer.py $(ARGS)
+
+import-commissions:
+	PYTHONPATH=.:apps/api python3 scripts/import_commissions.py $(ARGS)
 
 run-api:
 	PYTHONPATH=apps/api uvicorn app.main:app --reload --host 0.0.0.0 --port 8000

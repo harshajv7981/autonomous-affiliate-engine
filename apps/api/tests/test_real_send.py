@@ -95,7 +95,7 @@ def test_click_redirect_and_test_conversion_counted_once(world):
     target = urlparse(click.headers["location"])
     assert target.path == "/mock-network/click"
     query = parse_qs(target.query)
-    assert query["sub_id"] == [f"{campaign_id}__{subscriber_id}"]
+    assert len(query["sub_id"][0]) == 16  # short per-click id, echoed back by networks
 
     page = client.get(f"{target.path}?{target.query}")
     assert page.status_code == 200 and "Complete test purchase" in page.text

@@ -71,3 +71,7 @@ def test_advertiser_approval_required_is_review_not_send():
     result = _check(offer=_offer(email_approval_required=True))
     assert result.decision is ComplianceDecision.REVIEW
     assert result.is_sendable is False
+
+
+def test_worldwide_offer_matches_any_audience_geo():
+    assert _check(offer=_offer(geo="ALL"), audience=_audience(geo="IN")).decision is ComplianceDecision.APPROVE

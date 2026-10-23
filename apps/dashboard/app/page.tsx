@@ -46,6 +46,17 @@ type RealRow = {
   conversions: number;
   test_commission: number;
   unsubscribes: number;
+  confirmed_earnings: number;
+};
+
+type Earnings = {
+  currency: string;
+  confirmed: number;
+  pending: number;
+  paid: number;
+  reversed: number;
+  attributed: number;
+  unattributed: number;
 };
 
 type BlockedRow = {
@@ -65,6 +76,7 @@ export default function DashboardPage() {
   const [campaigns, setCampaigns] = useState<CampaignRow[]>([]);
   const [blocked, setBlocked] = useState<BlockedRow[]>([]);
   const [real, setReal] = useState<RealRow[]>([]);
+  const [earnings, setEarnings] = useState<Earnings[]>([]);
   const [live, setLive] = useState(false);
 
   useEffect(() => {
@@ -78,6 +90,7 @@ export default function DashboardPage() {
         setCampaigns(c.campaigns ?? []);
         setBlocked(c.blocked ?? []);
         setReal(r.campaigns ?? []);
+        setEarnings(r.earnings ?? []);
         setLive(true);
       })
       .catch(() => setLive(false));
@@ -211,10 +224,44 @@ export default function DashboardPage() {
           </table>
         </section>
 
-        <section style={{ ...card, marginBottom: '2rem', overflowX: 'auto', border: '2px solid #16a34a' }}>
+        <section style={{ ...card, marginBottom: '2rem', border: '2px solid #16a34a' }}>
+          <h3 style={{ margin: '0 0 0.25rem' }}>Real earnings</h3>
+          <p style={{ margin: '0 0 1rem', color: '#6b7280', fontSize: 13 }}>
+            From your affiliate network&apos;s own reports (make import-commissions). Only approved and paid commissions count as earned.
+          </p>
+          {earnings.length === 0 && <p style={{ margin: 0, color: '#6b7280' }}>No commission reports imported yet.</p>}
+          {earnings.map((e) => (
+            <div
+              key={e.currency}
+              style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem' }}
+            >
+              {[
+                ['Confirmed earnings', e.confirmed],
+                ['Paid out', e.paid],
+                ['Pending', e.pending],
+                ['Reversed', e.reversed],
+              ].map(([label, value]) => (
+                <div key={label as string}>
+                  <div style={{ color: '#6b7280', fontSize: 13 }}>{label}</div>
+                  <div style={{ fontSize: '1.5rem', fontWeight: 700 }}>
+                    {(value as number).toFixed(2)} {e.currency}
+                  </div>
+                </div>
+              ))}
+              <div>
+                <div style={{ color: '#6b7280', fontSize: 13 }}>Attributed / unattributed</div>
+                <div style={{ fontSize: '1.5rem', fontWeight: 700 }}>
+                  {e.attributed} / {e.unattributed}
+                </div>
+              </div>
+            </div>
+          ))}
+        </section>
+
+        <section style={{ ...card, marginBottom: '2rem', overflowX: 'auto' }}>
           <h3 style={{ margin: '0 0 0.25rem' }}>Real test sends (your own inboxes)</h3>
           <p style={{ margin: '0 0 1rem', color: '#6b7280', fontSize: 13 }}>
-            Real emails and real clicks. Conversions come from the mock network, so commission is test-only — not real money.
+            Real emails and real clicks. &quot;Test&quot; columns come from the mock network (not money); &quot;Confirmed&quot; is real, from imported network reports.
           </p>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
@@ -226,6 +273,7 @@ export default function DashboardPage() {
                 <th style={cell}>Test conversions</th>
                 <th style={cell}>Test commission</th>
                 <th style={cell}>Unsubscribes</th>
+                <th style={cell}>Confirmed earnings</th>
               </tr>
             </thead>
             <tbody>
@@ -238,11 +286,12 @@ export default function DashboardPage() {
                   <td style={cell}>{row.conversions}</td>
                   <td style={cell}>{money(row.test_commission)}</td>
                   <td style={cell}>{row.unsubscribes}</td>
+                  <td style={cell}>{money(row.confirmed_earnings)}</td>
                 </tr>
               ))}
               {real.length === 0 && (
                 <tr>
-                  <td colSpan={7} style={{ ...cell, color: '#6b7280' }}>No real test sends yet — run make send-test-live.</td>
+                  <td colSpan={8} style={{ ...cell, color: '#6b7280' }}>No real test sends yet — run make send-test-live.</td>
                 </tr>
               )}
             </tbody>
