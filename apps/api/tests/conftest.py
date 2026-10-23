@@ -1,4 +1,5 @@
 import pytest
+from app.config import settings
 from sqlalchemy import inspect
 
 from db.models import Base
@@ -11,6 +12,17 @@ def _postgres_available() -> bool:
             return True
     except Exception:  # noqa: BLE001  (any connection failure means unavailable)
         return False
+
+
+@pytest.fixture(autouse=True)
+def _isolate_from_local_env(monkeypatch):
+    """Tests never use the developer's .env secrets or call real services (Ollama,
+    ClickBank, SMTP); individual tests opt in by monkeypatching what they need."""
+    for name, value in {
+        "llm_provider": "none", "clickbank_api_key": "", "test_recipients": "",
+        "smtp_username": "", "smtp_password": "", "track_opens": True, "system_active": True,
+    }.items():
+        monkeypatch.setattr(settings, name, value)
 
 
 @pytest.fixture
