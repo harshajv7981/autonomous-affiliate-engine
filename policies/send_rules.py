@@ -3,6 +3,8 @@ from domain.compliance import ComplianceDecision, ComplianceResult
 from policies.campaign_rules import validate_campaign
 from policies.content_rules import check_content_compliance
 
+ANY_GEO = "ALL"  # worldwide offers (common for digital products) match every audience
+
 SEND_RULES = (
     "send.geo_match",
     "send.disclosure",
@@ -34,7 +36,7 @@ def validate_send(
     base = validate_campaign(offer, audience, package.get("subject", ""), package.get("body", ""))
     blocking: list[str] = []
 
-    if getattr(offer, "geo", None) != getattr(audience, "geo", None):
+    if getattr(offer, "geo", None) not in (ANY_GEO, getattr(audience, "geo", None)):
         blocking.append("GEO_MISMATCH")
     blocking += [reason for field, reason in REQUIRED_FIELDS if not package.get(field)]
     if already_sent:

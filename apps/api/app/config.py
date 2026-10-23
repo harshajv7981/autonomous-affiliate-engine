@@ -11,8 +11,15 @@ class Settings(BaseSettings):
     sender_name: str = "Affiliate Engine Lab"
     sender_email: str = "lab@example.test"
     sender_postal_address: str = "Simulation only - set a real postal address before sending"
-    unsubscribe_base_url: str = "http://localhost:8008/unsubscribe"
+    # Base URL that recipients' mail clients can reach (click, unsubscribe, mock network links).
+    public_base_url: str = "http://localhost:8008"
     frequency_cap_per_run: int = 1  # max campaigns per audience per engine run
+    # Real sends go ONLY to these comma-separated addresses (inboxes you own). Empty = no real sends.
+    test_recipients: str = ""
+    smtp_host: str = "smtp.gmail.com"
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""  # Gmail: an app password, never your account password
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

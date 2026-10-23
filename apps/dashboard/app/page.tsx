@@ -38,6 +38,27 @@ type CampaignRow = {
   action_reason: string;
 };
 
+type RealRow = {
+  campaign_id: string;
+  sent: number;
+  clicks: number;
+  unique_clickers: number;
+  conversions: number;
+  test_commission: number;
+  unsubscribes: number;
+  confirmed_earnings: number;
+};
+
+type Earnings = {
+  currency: string;
+  confirmed: number;
+  pending: number;
+  paid: number;
+  reversed: number;
+  attributed: number;
+  unattributed: number;
+};
+
 type BlockedRow = {
   campaign_id: string;
   name: string;
@@ -54,17 +75,22 @@ export default function DashboardPage() {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [campaigns, setCampaigns] = useState<CampaignRow[]>([]);
   const [blocked, setBlocked] = useState<BlockedRow[]>([]);
+  const [real, setReal] = useState<RealRow[]>([]);
+  const [earnings, setEarnings] = useState<Earnings[]>([]);
   const [live, setLive] = useState(false);
 
   useEffect(() => {
     Promise.all([
       fetch(`${API}/api/analytics/overview`).then((r) => r.json()),
       fetch(`${API}/api/analytics/campaigns`).then((r) => r.json()),
+      fetch(`${API}/api/analytics/real`).then((r) => r.json()),
     ])
-      .then(([o, c]) => {
+      .then(([o, c, r]) => {
         setOverview(o);
         setCampaigns(c.campaigns ?? []);
         setBlocked(c.blocked ?? []);
+        setReal(r.campaigns ?? []);
+        setEarnings(r.earnings ?? []);
         setLive(true);
       })
       .catch(() => setLive(false));
@@ -192,6 +218,80 @@ export default function DashboardPage() {
                   <td colSpan={9} style={{ ...cell, color: '#6b7280' }}>
                     {halted ? 'Kill switch is on — no campaigns run.' : 'No campaigns yet — run make migrate && make seed.'}
                   </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </section>
+
+        <section style={{ ...card, marginBottom: '2rem', border: '2px solid #16a34a' }}>
+          <h3 style={{ margin: '0 0 0.25rem' }}>Real earnings</h3>
+          <p style={{ margin: '0 0 1rem', color: '#6b7280', fontSize: 13 }}>
+            From your affiliate network&apos;s own reports (make import-commissions). Only approved and paid commissions count as earned.
+          </p>
+          {earnings.length === 0 && <p style={{ margin: 0, color: '#6b7280' }}>No commission reports imported yet.</p>}
+          {earnings.map((e) => (
+            <div
+              key={e.currency}
+              style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem' }}
+            >
+              {[
+                ['Confirmed earnings', e.confirmed],
+                ['Paid out', e.paid],
+                ['Pending', e.pending],
+                ['Reversed', e.reversed],
+              ].map(([label, value]) => (
+                <div key={label as string}>
+                  <div style={{ color: '#6b7280', fontSize: 13 }}>{label}</div>
+                  <div style={{ fontSize: '1.5rem', fontWeight: 700 }}>
+                    {(value as number).toFixed(2)} {e.currency}
+                  </div>
+                </div>
+              ))}
+              <div>
+                <div style={{ color: '#6b7280', fontSize: 13 }}>Attributed / unattributed</div>
+                <div style={{ fontSize: '1.5rem', fontWeight: 700 }}>
+                  {e.attributed} / {e.unattributed}
+                </div>
+              </div>
+            </div>
+          ))}
+        </section>
+
+        <section style={{ ...card, marginBottom: '2rem', overflowX: 'auto' }}>
+          <h3 style={{ margin: '0 0 0.25rem' }}>Real test sends (your own inboxes)</h3>
+          <p style={{ margin: '0 0 1rem', color: '#6b7280', fontSize: 13 }}>
+            Real emails and real clicks. &quot;Test&quot; columns come from the mock network (not money); &quot;Confirmed&quot; is real, from imported network reports.
+          </p>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ textAlign: 'left', color: '#6b7280', fontSize: 13 }}>
+                <th style={cell}>Campaign</th>
+                <th style={cell}>Sent</th>
+                <th style={cell}>Clicks</th>
+                <th style={cell}>Unique clickers</th>
+                <th style={cell}>Test conversions</th>
+                <th style={cell}>Test commission</th>
+                <th style={cell}>Unsubscribes</th>
+                <th style={cell}>Confirmed earnings</th>
+              </tr>
+            </thead>
+            <tbody>
+              {real.map((row) => (
+                <tr key={row.campaign_id} style={{ borderTop: '1px solid #e5e7eb' }}>
+                  <td style={{ ...cell, fontWeight: 600 }}>{row.campaign_id}</td>
+                  <td style={cell}>{row.sent}</td>
+                  <td style={cell}>{row.clicks}</td>
+                  <td style={cell}>{row.unique_clickers}</td>
+                  <td style={cell}>{row.conversions}</td>
+                  <td style={cell}>{money(row.test_commission)}</td>
+                  <td style={cell}>{row.unsubscribes}</td>
+                  <td style={cell}>{money(row.confirmed_earnings)}</td>
+                </tr>
+              ))}
+              {real.length === 0 && (
+                <tr>
+                  <td colSpan={8} style={{ ...cell, color: '#6b7280' }}>No real test sends yet — run make send-test-live.</td>
                 </tr>
               )}
             </tbody>
