@@ -7,6 +7,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.api.routes.analytics import router as analytics_router
 from app.api.routes.engine import router as engine_router
 from app.api.routes.offers import router as offers_router
+from app.api.routes.tracking import router as tracking_router
 from app.config import settings
 from db.session import engine
 
@@ -14,6 +15,7 @@ app = FastAPI(title="Autonomous Affiliate Engine API")
 app.include_router(offers_router)
 app.include_router(analytics_router)
 app.include_router(engine_router)
+app.include_router(tracking_router)
 
 
 @app.get("/health")

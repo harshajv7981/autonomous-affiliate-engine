@@ -4,6 +4,8 @@ from typing import Any
 
 from integrations.affiliate.base import AffiliateNetworkAdapter
 
+MOCK_TRACKING_TEMPLATE = "/mock-network/click?offer_id={offer_id}&sub_id={sub_id}"
+
 
 class MockAffiliateAdapter(AffiliateNetworkAdapter):
     async def sync_offers(self) -> list[dict[str, Any]]:
@@ -29,16 +31,15 @@ class MockAffiliateAdapter(AffiliateNetworkAdapter):
                     "email_allowed": email_allowed,
                     "email_approval_required": False,
                     "terms_url": f"https://affiliate.mock/offers/{i}/terms",
-                    "tracking_url_template": (
-                        "https://affiliate.mock/tracking?offer_id={offer_id}&sub_id={sub_id}"
-                    ),
+                    # The mock network is served by our own API (relative to PUBLIC_BASE_URL).
+                    "tracking_url_template": MOCK_TRACKING_TEMPLATE,
                     "status": "active",
                 }
             )
         return offers
 
     async def build_tracking_link(self, offer_id: str, sub_id: str) -> str:
-        return f"https://affiliate.mock/tracking?offer_id={offer_id}&sub_id={sub_id}"
+        return MOCK_TRACKING_TEMPLATE.format(offer_id=offer_id, sub_id=sub_id)
 
     async def sync_conversions(self, since_timestamp):
         return []
