@@ -120,7 +120,7 @@ export default function DashboardPage() {
           {navItems.map((item) => (
             <Link
               key={item}
-              href={item === 'Campaigns' ? '/campaigns/growth-push' : item === 'Overview' ? '/' : '#'}
+              href={item === 'Overview' ? '/' : '#'}
               style={{
                 padding: '0.75rem 0.9rem',
                 borderRadius: 8,

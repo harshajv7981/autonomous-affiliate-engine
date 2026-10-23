@@ -149,7 +149,6 @@ Phase 0 architecture work is complete. Phase 1 local infrastructure is complete 
 
 ### Phase 0: Architecture
 
-- Replaced the original instructions with the updated `$0` local-development instructions in `PROJECT_INSTRUCTIONS.md`.
 - Added domain event contracts with event IDs, event types, aggregate IDs, timestamps, payloads, correlation IDs, and idempotency keys.
 - Added deterministic compliance decision contracts: `APPROVE`, `REVIEW`, and `BLOCK`.
 - Preserved the adapter boundary for affiliate networks.
