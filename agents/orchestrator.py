@@ -63,10 +63,11 @@ def _overview(totals: dict, revenue: float, email_cost: float, ai_cost: float,
 def _load_world(session: Session):
     """ORM rows share the domain dataclasses' attribute names, so the rest of the
     loop (duck-typed) treats them identically."""
-    offers = list(session.scalars(select(OfferModel)))
-    audiences = list(session.scalars(select(AudienceModel)))
+    # Simulation never touches real records (e.g. owner test inboxes).
+    offers = list(session.scalars(select(OfferModel).where(OfferModel.is_simulated.is_(True))))
+    audiences = list(session.scalars(select(AudienceModel).where(AudienceModel.is_simulated.is_(True))))
     recipients_by_audience: dict[str, list] = defaultdict(list)
-    for subscriber in session.scalars(select(SubscriberModel)):
+    for subscriber in session.scalars(select(SubscriberModel).where(SubscriberModel.is_simulated.is_(True))):
         recipients_by_audience[subscriber.audience_id].append(subscriber)
     return offers, audiences, recipients_by_audience
 
@@ -95,20 +96,42 @@ async def run_engine(
             session.close()
 
 
-def _run(offers, audiences, recipients_by_audience, rates) -> dict:
-    sender_identity = (
-        f"{settings.sender_name} <{settings.sender_email}>, {settings.sender_postal_address}"
+def sender_identity(email: str | None = None) -> str:
+    return f"{settings.sender_name} <{email or settings.sender_email}>, {settings.sender_postal_address}"
+
+
+def build_send_package(offer, audience, campaign, sender: str) -> dict:
+    """Everything the send gate checks: copy, variants, disclosure, links, identity."""
+    return {
+        **generate_creative(offer, audience),
+        "tracking_url": tracking_url(offer, campaign.id),
+        "unsubscribe_url": f"{settings.public_base_url}/unsubscribe?campaign={campaign.id}",
+        "sender_identity": sender,
+    }
+
+
+def new_campaign(offer, audience):
+    creative = generate_creative(offer, audience)
+    return build_campaign(
+        offer, audience, creative["subject"], creative["preheader"], creative["body"], creative["cta"],
     )
 
-    # Offer agent: keep only email-eligible offers, best-scoring first.
+
+def eligible_offers(offers) -> list:
+    """Offer agent: email-eligible offers, best-scoring first."""
     eligible = [
         offer
         for offer in offers
         if offer.email_allowed and check_offer_eligibility(offer, "email").is_sendable
     ]
-    eligible.sort(key=lambda o: score_offer(o)["score"], reverse=True)
+    return sorted(eligible, key=lambda o: score_offer(o)["score"], reverse=True)
+
+
+def _run(offers, audiences, recipients_by_audience, rates) -> dict:
+    sender = sender_identity()
+
     offers_by_geo: dict[str, list] = defaultdict(list)
-    for offer in eligible:
+    for offer in eligible_offers(offers):
         offers_by_geo[offer.geo].append(offer)
 
     campaigns: list[dict] = []
@@ -127,17 +150,8 @@ def _run(offers, audiences, recipients_by_audience, rates) -> dict:
         offer = pool[geo_index[audience.geo] % len(pool)]
         geo_index[audience.geo] += 1
 
-        creative = generate_creative(offer, audience)
-        campaign = build_campaign(
-            offer, audience, creative["subject"], creative["preheader"],
-            creative["body"], creative["cta"],
-        )
-        package = {
-            **creative,
-            "tracking_url": tracking_url(offer, campaign.id),
-            "unsubscribe_url": f"{settings.unsubscribe_base_url}?campaign={campaign.id}",
-            "sender_identity": sender_identity,
-        }
+        campaign = new_campaign(offer, audience)
+        package = build_send_package(offer, audience, campaign, sender)
         campaign.metadata.update(package)
 
         # Compliance gate: hard deterministic check before any send.

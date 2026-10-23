@@ -62,7 +62,10 @@ def seed_audiences_and_subscribers(session: Session) -> dict:
         ))
     session.commit()
 
-    already = session.scalar(select(func.count()).select_from(SubscriberModel))
+    # Count only simulated rows: real owner-test subscribers must not suppress the synthetic world.
+    already = session.scalar(
+        select(func.count()).select_from(SubscriberModel).where(SubscriberModel.is_simulated.is_(True))
+    )
     if not already:
         now = datetime.now(UTC)
         subscribers, consents, suppressions = [], [], []

@@ -34,16 +34,30 @@ Commission → Revenue/cost → Optimizer recommendation → Dashboard.
   unflagged rows are treated as test data); all engine output labeled
   `environment: simulation`.
 
+## Real inbox test (owner-controlled)
+
+Real emails can go to inboxes you own, and only those:
+
+- `TEST_RECIPIENTS` allowlist in `.env`; anything not listed never receives mail.
+- `make send-test` = dry run (default); `make send-test-live` = send via SMTP
+  (`SMTP_*` in `.env`; Gmail works with an app password).
+- Every send passes the full compliance gate, is recorded once per
+  (campaign, subscriber) in `events`, and each run moves to the next untried offer.
+- Links: `/r/{campaign}/{subscriber}` records a real click and redirects to the mock
+  network's offer page, which records a **test** conversion once per click
+  (not real money). `/unsubscribe` needs a confirm click, then suppresses the address.
+- Results: `GET /api/analytics/real` and the dashboard's "Real test sends" section,
+  kept apart from simulated numbers. Simulation never loads real records.
+
 ## Pending — engineering (needed before a real pilot, not before)
 
 - Real affiliate adapter (one network) behind `AffiliateNetworkAdapter`.
-- Real email sender (e.g. Resend/SES) that refuses `is_simulated` recipients and sends
-  only to controlled test inboxes until launch approval.
-- Opt-in signup + unsubscribe endpoints writing to `consent_records`/`suppression_records`.
-- Conversion/commission ledger with states `PENDING/APPROVED/REJECTED/REVERSED/PAID`,
-  idempotency keys, and reconciliation against network reports.
-- Offer terms "last checked" date; per-variant A/B measurement; auth on API/dashboard
-  before any public exposure.
+- Opt-in signup endpoint (unsubscribe exists).
+- Commission states `PENDING/APPROVED/REJECTED/REVERSED/PAID` and reconciliation
+  against network reports (events already carry idempotency keys).
+- Signed unsubscribe/click tokens and auth on API/dashboard before public exposure.
+- Offer terms "last checked" date; transactional ESP (SES/Resend) instead of Gmail
+  SMTP once sending beyond your own inboxes.
 
 ## Pending — needs you (cannot be automated)
 

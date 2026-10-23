@@ -38,6 +38,16 @@ type CampaignRow = {
   action_reason: string;
 };
 
+type RealRow = {
+  campaign_id: string;
+  sent: number;
+  clicks: number;
+  unique_clickers: number;
+  conversions: number;
+  test_commission: number;
+  unsubscribes: number;
+};
+
 type BlockedRow = {
   campaign_id: string;
   name: string;
@@ -54,17 +64,20 @@ export default function DashboardPage() {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [campaigns, setCampaigns] = useState<CampaignRow[]>([]);
   const [blocked, setBlocked] = useState<BlockedRow[]>([]);
+  const [real, setReal] = useState<RealRow[]>([]);
   const [live, setLive] = useState(false);
 
   useEffect(() => {
     Promise.all([
       fetch(`${API}/api/analytics/overview`).then((r) => r.json()),
       fetch(`${API}/api/analytics/campaigns`).then((r) => r.json()),
+      fetch(`${API}/api/analytics/real`).then((r) => r.json()),
     ])
-      .then(([o, c]) => {
+      .then(([o, c, r]) => {
         setOverview(o);
         setCampaigns(c.campaigns ?? []);
         setBlocked(c.blocked ?? []);
+        setReal(r.campaigns ?? []);
         setLive(true);
       })
       .catch(() => setLive(false));
@@ -192,6 +205,44 @@ export default function DashboardPage() {
                   <td colSpan={9} style={{ ...cell, color: '#6b7280' }}>
                     {halted ? 'Kill switch is on — no campaigns run.' : 'No campaigns yet — run make migrate && make seed.'}
                   </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </section>
+
+        <section style={{ ...card, marginBottom: '2rem', overflowX: 'auto', border: '2px solid #16a34a' }}>
+          <h3 style={{ margin: '0 0 0.25rem' }}>Real test sends (your own inboxes)</h3>
+          <p style={{ margin: '0 0 1rem', color: '#6b7280', fontSize: 13 }}>
+            Real emails and real clicks. Conversions come from the mock network, so commission is test-only — not real money.
+          </p>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ textAlign: 'left', color: '#6b7280', fontSize: 13 }}>
+                <th style={cell}>Campaign</th>
+                <th style={cell}>Sent</th>
+                <th style={cell}>Clicks</th>
+                <th style={cell}>Unique clickers</th>
+                <th style={cell}>Test conversions</th>
+                <th style={cell}>Test commission</th>
+                <th style={cell}>Unsubscribes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {real.map((row) => (
+                <tr key={row.campaign_id} style={{ borderTop: '1px solid #e5e7eb' }}>
+                  <td style={{ ...cell, fontWeight: 600 }}>{row.campaign_id}</td>
+                  <td style={cell}>{row.sent}</td>
+                  <td style={cell}>{row.clicks}</td>
+                  <td style={cell}>{row.unique_clickers}</td>
+                  <td style={cell}>{row.conversions}</td>
+                  <td style={cell}>{money(row.test_commission)}</td>
+                  <td style={cell}>{row.unsubscribes}</td>
+                </tr>
+              ))}
+              {real.length === 0 && (
+                <tr>
+                  <td colSpan={7} style={{ ...cell, color: '#6b7280' }}>No real test sends yet — run make send-test-live.</td>
                 </tr>
               )}
             </tbody>
