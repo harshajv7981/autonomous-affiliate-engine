@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import Boolean, Integer, String
+from sqlalchemy import Boolean, Integer, String, true
 from sqlalchemy.orm import Mapped, mapped_column
 
 from db.models.base import Base
@@ -20,3 +20,4 @@ class AudienceModel(Base):
     permission_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     email_allowed: Mapped[bool] = mapped_column(Boolean, default=False)
     status: Mapped[str] = mapped_column(String, default="active", index=True)
+    is_simulated: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())

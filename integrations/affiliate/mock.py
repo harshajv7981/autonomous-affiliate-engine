@@ -28,6 +28,10 @@ class MockAffiliateAdapter(AffiliateNetworkAdapter):
                     "allowed_traffic_types": traffic_types,
                     "email_allowed": email_allowed,
                     "email_approval_required": False,
+                    "terms_url": f"https://affiliate.mock/offers/{i}/terms",
+                    "tracking_url_template": (
+                        "https://affiliate.mock/tracking?offer_id={offer_id}&sub_id={sub_id}"
+                    ),
                     "status": "active",
                 }
             )

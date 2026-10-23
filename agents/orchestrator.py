@@ -2,27 +2,30 @@
 persisted (seeded) offers, audiences and subscribers by chaining the agents and
 deterministic services.
 
-offer -> score -> match audience -> generate creative -> compliance gate ->
-send -> simulate funnel -> revenue/cost -> optimizer decision -> aggregate.
+offer -> score -> match audience -> generate creative + variants + tracking link ->
+send compliance gate -> send -> simulate funnel -> revenue/cost -> rates ->
+optimizer recommendation -> aggregate.
 
 Hard rules stay deterministic: the kill switch and the compliance gate can never
-be overridden by any agent.
+be overridden by any agent. Every number produced here is SIMULATED.
 """
 from __future__ import annotations
 
 from collections import defaultdict
 
+from app.config import settings
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from agents.campaign_agent.graph import build_campaign, generate_creative
+from agents.campaign_agent.graph import build_campaign, generate_creative, tracking_url
 from agents.offer_agent.graph import score_offer
+from agents.optimizer_agent.graph import MODE as OPTIMIZER_MODE
 from agents.optimizer_agent.graph import decide
 from db.models import AudienceModel, OfferModel, SubscriberModel
 from db.session import SessionLocal
-from policies.campaign_rules import validate_campaign
 from policies.offer_rules import check_offer_eligibility
-from services.analytics import build_overview, calculate_metrics
+from policies.send_rules import validate_send
+from services.analytics import build_overview, calculate_rates
 from services.campaign_execution import execute_campaign
 from simulator.events import SimulationRates, simulate_campaign_outcome
 
@@ -32,9 +35,29 @@ EMAIL_COST_PER_RECIPIENT = 0.0005
 AI_COST_PER_CAMPAIGN = 0.02
 INFRASTRUCTURE_COST = 1.0  # fixed per run
 
+FUNNEL_FIELDS = ("sent", "delivered", "bounces", "opens", "clicks", "conversions", "unsubscribes", "complaints")
+LABELS = {"environment": "simulation", "is_simulated": True, "optimizer_mode": OPTIMIZER_MODE}
 
-def _empty_overview() -> dict:
-    return build_overview(0.0, 0.0, 0.0, 0.0, 0.0, 0, 0, 0)
+
+def _overview(totals: dict, revenue: float, email_cost: float, ai_cost: float,
+              infrastructure_cost: float, active_campaigns: int, status: str) -> dict:
+    overview = build_overview(
+        revenue=round(revenue, 2),
+        traffic_cost=0.0,
+        email_cost=round(email_cost, 4),
+        ai_cost=round(ai_cost, 4),
+        infrastructure_cost=infrastructure_cost,
+        active_campaigns=active_campaigns,
+        clicks=totals.get("clicks", 0),
+        conversions=totals.get("conversions", 0),
+    )
+    return {
+        **overview,
+        **calculate_rates(totals, overview["revenue"], overview["net_profit"]),
+        **{field: totals.get(field, 0) for field in FUNNEL_FIELDS},
+        **LABELS,
+        "system_status": status,
+    }
 
 
 def _load_world(session: Session):
@@ -55,7 +78,12 @@ async def run_engine(
 ) -> dict:
     # Kill switch (deterministic, never LLM-gated): no load, no send when halted.
     if not system_active:
-        return {"status": "halted", "overview": _empty_overview(), "campaigns": [], "blocked": []}
+        return {
+            "status": "halted",
+            "overview": _overview({}, 0.0, 0.0, 0.0, 0.0, 0, "halted"),
+            "campaigns": [],
+            "blocked": [],
+        }
 
     owns_session = session is None
     session = session or SessionLocal()
@@ -68,6 +96,10 @@ async def run_engine(
 
 
 def _run(offers, audiences, recipients_by_audience, rates) -> dict:
+    sender_identity = (
+        f"{settings.sender_name} <{settings.sender_email}>, {settings.sender_postal_address}"
+    )
+
     # Offer agent: keep only email-eligible offers, best-scoring first.
     eligible = [
         offer
@@ -81,7 +113,10 @@ def _run(offers, audiences, recipients_by_audience, rates) -> dict:
 
     campaigns: list[dict] = []
     blocked: list[dict] = []
-    totals = {"revenue": 0.0, "email_cost": 0.0, "ai_cost": 0.0, "clicks": 0, "conversions": 0}
+    totals: dict[str, int] = defaultdict(int)
+    revenue_total = email_cost_total = ai_cost_total = 0.0
+    sent_keys: set[tuple[str, str]] = set()
+    audience_sends: dict[str, int] = defaultdict(int)
 
     geo_index: dict[str, int] = defaultdict(int)
     for audience in audiences:
@@ -97,52 +132,66 @@ def _run(offers, audiences, recipients_by_audience, rates) -> dict:
             offer, audience, creative["subject"], creative["preheader"],
             creative["body"], creative["cta"],
         )
+        package = {
+            **creative,
+            "tracking_url": tracking_url(offer, campaign.id),
+            "unsubscribe_url": f"{settings.unsubscribe_base_url}?campaign={campaign.id}",
+            "sender_identity": sender_identity,
+        }
+        campaign.metadata.update(package)
 
         # Compliance gate: hard deterministic check before any send.
-        decision = validate_campaign(offer, audience, creative["subject"], creative["body"])
+        key = (offer.id, audience.id)
+        decision = validate_send(
+            offer, audience, package,
+            already_sent=key in sent_keys,
+            audience_sends=audience_sends[audience.id],
+            frequency_cap=settings.frequency_cap_per_run,
+        )
         if not decision.is_sendable:
             campaign.state = "BLOCKED"
             blocked.append({
-                "campaign_id": campaign.id, "offer_id": offer.id, "audience_id": audience.id,
+                "campaign_id": campaign.id, "name": campaign.name,
+                "offer_id": offer.id, "audience_id": audience.id,
                 "decision": decision.decision.value, "reasons": list(decision.reasons),
             })
             continue
+        sent_keys.add(key)
+        audience_sends[audience.id] += 1
 
         campaign.approved = True
         sent = execute_campaign(campaign, recipients_by_audience[audience.id], decision)["sent_count"]
-        outcome = simulate_campaign_outcome(sent, offer, rates)
-        metrics = calculate_metrics(outcome["clicks"], outcome["conversions"], offer.payout)
+        funnel = simulate_campaign_outcome(sent, offer, rates)
 
-        revenue = outcome["commission"]
+        revenue = funnel["commission"]
         email_cost = round(sent * EMAIL_COST_PER_RECIPIENT, 4)
         ai_cost = AI_COST_PER_CAMPAIGN
         net = revenue - email_cost - ai_cost
-        action = decide(metrics, net)
+        campaign_rates = calculate_rates(funnel, revenue, net)
+        recommendation = decide({**funnel, **campaign_rates}, net)
 
-        totals["revenue"] += revenue
-        totals["email_cost"] += email_cost
-        totals["ai_cost"] += ai_cost
-        totals["clicks"] += outcome["clicks"]
-        totals["conversions"] += outcome["conversions"]
+        revenue_total += revenue
+        email_cost_total += email_cost
+        ai_cost_total += ai_cost
+        for field in FUNNEL_FIELDS:
+            totals[field] += funnel[field]
 
         campaigns.append({
             "campaign_id": campaign.id, "name": campaign.name,
             "offer_id": offer.id, "audience_id": audience.id,
-            "sent": sent, "clicks": outcome["clicks"], "conversions": outcome["conversions"],
-            "cvr": metrics["cvr"], "epc": metrics["epc"],
+            **{field: funnel[field] for field in FUNNEL_FIELDS},
+            **campaign_rates,
             "revenue": round(revenue, 2), "cost": round(email_cost + ai_cost, 2),
             "net_contribution": round(net, 2),
-            "action": action["action"], "state": "RUNNING",
+            "action": recommendation["action"], "action_reason": recommendation["reason"],
+            "tracking_url": package["tracking_url"],
+            "subject_variants": package["subject_variants"],
+            "state": "RUNNING",
+            **LABELS,
         })
 
-    overview = build_overview(
-        revenue=round(totals["revenue"], 2),
-        traffic_cost=0.0,
-        email_cost=round(totals["email_cost"], 4),
-        ai_cost=round(totals["ai_cost"], 4),
-        infrastructure_cost=INFRASTRUCTURE_COST,
-        active_campaigns=len(campaigns),
-        clicks=totals["clicks"],
-        conversions=totals["conversions"],
+    overview = _overview(
+        totals, revenue_total, email_cost_total, ai_cost_total,
+        INFRASTRUCTURE_COST, len(campaigns), "active",
     )
     return {"status": "active", "overview": overview, "campaigns": campaigns, "blocked": blocked}

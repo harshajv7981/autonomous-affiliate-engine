@@ -11,6 +11,27 @@ def calculate_metrics(clicks: int, conversions: int, payout: float) -> dict:
     }
 
 
+def calculate_rates(funnel: dict, revenue: float, net: float) -> dict:
+    """CTR/CVR/EPC, delivery-health rates, and the primary KPI:
+    net contribution per 1,000 eligible recipients."""
+    sent = funnel.get("sent", 0)
+    delivered = funnel.get("delivered", 0)
+    clicks = funnel.get("clicks", 0)
+
+    def ratio(numerator: float, denominator: float, digits: int = 4) -> float:
+        return round(numerator / denominator, digits) if denominator else 0.0
+
+    return {
+        "ctr": ratio(clicks, delivered),
+        "cvr": ratio(funnel.get("conversions", 0), clicks),
+        "epc": ratio(revenue, clicks),
+        "bounce_rate": ratio(funnel.get("bounces", 0), sent),
+        "unsubscribe_rate": ratio(funnel.get("unsubscribes", 0), delivered),
+        "complaint_rate": ratio(funnel.get("complaints", 0), delivered, 5),
+        "net_contribution_per_1000": round(net / sent * 1000, 2) if sent else 0.0,
+    }
+
+
 def build_overview(
     revenue: float,
     traffic_cost: float,

@@ -1,14 +1,17 @@
 """Idempotent seeding of simulated offers, audiences and subscribers into Postgres.
 
-Re-running is safe: offers/audiences are merged by primary key, and the large
-subscriber/consent/suppression sets are inserted only when empty.
+Re-running is safe: offers upsert on (network_id, external_offer_id), audiences
+merge by primary key, and the large subscriber/consent/suppression sets are
+inserted only when empty.
 """
 from __future__ import annotations
 
 import uuid
+from dataclasses import asdict
 from datetime import UTC, datetime
 
 from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from db.models import (
@@ -25,27 +28,17 @@ from simulator.world import build_audiences, build_recipients
 
 async def seed_offers(session: Session) -> int:
     raw_offers = await MockAffiliateAdapter().sync_offers()
+    columns = {column.name for column in OfferModel.__table__.columns}
     for raw in raw_offers:
-        offer = OfferIngestionService.normalize_offer(raw)
-        session.merge(OfferModel(
-            id=offer.id,
-            network_id=offer.network_id,
-            external_offer_id=offer.external_offer_id,
-            name=offer.name,
-            description=offer.description,
-            advertiser=offer.advertiser,
-            category=offer.category,
-            geo=offer.geo,
-            payout=offer.payout,
-            payout_type=offer.payout_type,
-            epc=offer.epc,
-            conversion_rate=offer.conversion_rate,
-            allowed_traffic_types=offer.allowed_traffic_types,
-            email_allowed=offer.email_allowed,
-            email_approval_required=offer.email_approval_required,
-            terms_url=offer.terms_url,
-            tracking_url_template=offer.tracking_url_template,
-            status=offer.status,
+        values = {
+            key: value
+            for key, value in asdict(OfferIngestionService.normalize_offer(raw)).items()
+            if key in columns
+        }
+        stmt = insert(OfferModel).values(**values)
+        session.execute(stmt.on_conflict_do_update(
+            constraint="uq_offers_network_external",
+            set_={key: stmt.excluded[key] for key in values if key != "id"},
         ))
     session.commit()
     return session.scalar(select(func.count()).select_from(OfferModel))
