@@ -11,7 +11,7 @@ from domain.recipients.recipient import Recipient
 AUDIENCE_COUNT = 10
 # shortcut: 1,000/audience (not the 1,000-total Phase-3 target) so the expected-value
 # funnel yields enough conversions for the optimizer to show real range (SCALE vs
-# TEST), matching the 10k-scale example in PROJECT_INSTRUCTIONS section 16.
+# TEST).
 RECIPIENTS_PER_AUDIENCE = 1000
 
 

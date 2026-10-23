@@ -13,20 +13,14 @@ instructions before the synthetic campaign loop is expanded.
 - `apps/api/` owns HTTP transport and API schemas.
 - `apps/worker/` owns background job execution.
 
-## Event envelope
+## Events
 
-Every durable business event uses `DomainEvent` with:
-
-- immutable `event_id`
-- typed `event_type`
-- `aggregate_id`
-- UTC `occurred_at`
-- structured `payload`
-- optional `correlation_id`
-- optional `idempotency_key`
-
-Consumers must use `event_id` or `idempotency_key` to tolerate duplicate
-delivery.
+Real tracking events (`message_sent`, `open`, `click`, `conversion`,
+`unsubscribe`) are rows in the `events` table (`db/models/event.py`), written
+through `services/event_log.record_event`. Each has a unique `idempotency_key`,
+so duplicate sends, double-counted conversions and repeated deliveries are
+ignored. Real money lives separately in `commissions`, keyed by
+`(network, external_id)`.
 
 ## Compliance boundary
 
